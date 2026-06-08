@@ -88,7 +88,7 @@ If you use DENTEX, we would appreciate references to the following papers:
 
 
 ## License
-The data is provided under the [CC BY-SA 4.0 License](https://creativecommons.org/licenses/by-sa/4.0/), making it fully open-sourced.
+The data is provided under the [CC BY-NC-SA 4.0 License](https://creativecommons.org/licenses/by-nc-sa/4.0/), allowing non-commercial use, sharing, and adaptation with attribution and the same license for derivative works.
 
 The rest of this repository is under the [MIT License](https://choosealicense.com/licenses/mit/).
 
