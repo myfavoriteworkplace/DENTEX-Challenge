@@ -24,6 +24,7 @@ End-to-end technical guide covering: Google Colab setup → DENTEX dataset disco
 16. [Final Dataset Structure](#16-final-dataset-structure)
 17. [Create YOLO Configuration](#17-create-yolo-configuration)
 18. [Install YOLO](#18-install-yolo)
+18a. [Verify Dataset Classes Before Training](#18a-verify-dataset-classes-before-training)
 19. [Train YOLOv8](#19-train-yolov8)
 20. [Training Output](#20-training-output)
 21. [Locate Model](#21-locate-model)
@@ -31,6 +32,7 @@ End-to-end technical guide covering: Google Colab setup → DENTEX dataset disco
 23. [Validate Model](#23-validate-model)
 24. [Run Prediction](#24-run-prediction)
 25. [View Result](#25-view-result)
+25a. [Model Verification Before Deployment](#25a-model-verification-before-deployment)
 26. [Final Achievement](#final-achievement)
 27. [Current Status & Next Steps](#current-status--next-steps)
 
@@ -238,28 +240,38 @@ categories_3
 ## 10. Understand Categories
 
 ```python
-sample["categories_1"]
+sample["categories_3"]
 ```
 
 Output:
 
 ```json
 [
-  {"id": 0, "name": "1"},
-  {"id": 1, "name": "2"},
-  {"id": 2, "name": "3"},
-  {"id": 3, "name": "4"}
+  {"id": 0, "name": "Impacted"},
+  {"id": 1, "name": "Caries"},
+  {"id": 2, "name": "Periapical Lesion"},
+  {"id": 3, "name": "Deep Caries"}
 ]
 ```
 
 Classes:
 
-| ID | Name |
-|----|------|
-| 0  | 1    |
-| 1  | 2    |
-| 2  | 3    |
-| 3  | 4    |
+| ID | Name                 |
+|----|----------------------|
+| 0  | Impacted             |
+| 1  | Caries               |
+| 2  | Periapical Lesion    |
+| 3  | Deep Caries          |
+
+### Category Levels in DENTEX
+
+| Level  | Meaning                     | category_id |
+|--------|-----------------------------|--------------|
+| 1      | Quadrant classification     | category_id_1 |
+| 2      | Tooth enumeration           | category_id_2 |
+| 3      | **Dental disease findings** | **category_id_3** |
+
+For AI diagnosis assistance, `category_id_3` is selected because it represents actual dental findings.
 
 ---
 
@@ -333,8 +345,17 @@ Process for every image:
 
 1. Copy image to `images/train/`
 2. Read its annotations from the COCO JSON
-3. Convert each bounding box using `coco_to_yolo`
-4. Write `.txt` label file to `labels/train/`
+3. Extract disease class from each annotation:
+
+```python
+for annotation in image_annotations:
+    cls = annotation["category_id_3"]  # Disease class: 0=Impacted, 1=Caries, 2=Periapical Lesion, 3=Deep Caries
+    bbox = annotation["bbox"]  # COCO format
+    yolo_bbox = coco_to_yolo(bbox, image_width, image_height)
+```
+
+4. Convert each bounding box using `coco_to_yolo`
+5. Write `.txt` label file to `labels/train/` in format: `class x_center y_center width height`
 
 **Output**:
 
@@ -344,6 +365,13 @@ images/train/
 
 labels/train/
   train_111.txt
+```
+
+**Example label file content**:
+
+```
+1 0.45 0.32 0.12 0.18
+2 0.65 0.55 0.15 0.20
 ```
 
 ---
@@ -381,18 +409,16 @@ dentex_yolo/
 Create `dentex.yaml`:
 
 ```yaml
-path: /content/dentex_yolo
-
-train: images/train
-val: images/val
+train: /content/drive/MyDrive/dentex_project/yolo/images/train
+val: /content/drive/MyDrive/dentex_project/yolo/images/val
 
 nc: 4
 
 names:
-  0: "1"
-  1: "2"
-  2: "3"
-  3: "4"
+  0: Impacted
+  1: Caries
+  2: Periapical Lesion
+  3: Deep Caries
 ```
 
 ---
@@ -402,6 +428,38 @@ names:
 ```python
 !pip install ultralytics
 ```
+
+---
+
+## 18a. Verify Dataset Classes Before Training
+
+**Important**: Ensure your YOLO model will use meaningful disease labels.
+
+```python
+from ultralytics import YOLO
+
+# Load base model to verify class configuration
+model = YOLO("yolov8s.pt")
+print("Base model class names:")
+print(model.names)
+```
+
+After training completes, verify the trained model has correct labels:
+
+```python
+from ultralytics import YOLO
+model = YOLO("/content/drive/MyDrive/dentex_project/yolo/runs/detect/train/weights/best.pt")
+print("Trained model class names:")
+print(model.names)
+```
+
+**Expected output**:
+
+```
+{0: 'Impacted', 1: 'Caries', 2: 'Periapical Lesion', 3: 'Deep Caries'}
+```
+
+If class names appear as `0`, `1`, `2`, `3` or `1`, `2`, `3`, `4`, the model was trained on wrong category level. Retrain using the corrected `dentex.yaml` file.
 
 ---
 
@@ -415,10 +473,10 @@ from ultralytics import YOLO
 model = YOLO("yolov8s.pt")
 
 model.train(
-    data="/content/dentex.yaml",
+    data="/content/drive/MyDrive/dentex_project/dentex.yaml",
     epochs=100,
     imgsz=1024,
-    batch=8,
+    batch=8
 )
 ```
 
@@ -502,29 +560,65 @@ Output: dental X-ray with bounding boxes, confidence scores, and class IDs.
 
 ---
 
+## 25a. Model Verification Before Deployment
+
+Before integrating `best.pt` into your FastAPI backend or Hugging Face, verify the model outputs correct disease classes:
+
+```python
+from ultralytics import YOLO
+
+model = YOLO("/content/drive/MyDrive/dentex_project/yolo/runs/detect/train/weights/best.pt")
+print("Model class names:")
+print(model.names)
+```
+
+**Expected**:
+
+```
+{0: 'Impacted', 1: 'Caries', 2: 'Periapical Lesion', 3: 'Deep Caries'}
+```
+
+**If you see quadrant names** (`1`, `2`, `3`, `4`), the model was trained on wrong category. Delete training results and retrain.
+
+Only after this verification should `best.pt` be:
+- Moved to Hugging Face Model Hub
+- Deployed to FastAPI backend
+- Used in BookMySlot AI diagnosis system
+
+---
+
 ## Final Achievement
 
 ```
-DENTEX Dataset
+DENTEX Dataset (quadrant-enumeration-disease)
        |
        v
-COCO Annotation Processing
+COCO Annotation Processing (using categories_3)
        |
        v
-YOLO Dataset Conversion
+YOLO Dataset Conversion (disease classes)
        |
        v
 YOLOv8 Training
        |
        v
-Custom Dental AI Model
+Custom Dental Finding Detection Model
        |
        v
-best.pt
+best.pt with meaningful disease labels
        |
        v
 Ready for API Integration
 ```
+
+### Classes Detected
+
+- **Impacted teeth** (dental impaction)
+- **Caries** (dental decay)
+- **Periapical Lesion** (root infection indicator)
+- **Deep Caries** (advanced tooth decay)
+
+This model serves as the core AI engine for BookMySlot's diagnosis assistance system.
 
 ---
 
