@@ -323,13 +323,13 @@ class RCNNHead(nn.Module):
         pred_bboxes = self.apply_deltas(bboxes_deltas, bboxes.view(-1, 4))
         
         if freeze_class1:
-          class_logits_quadrant.detach()
-      
+            class_logits_quadrant = class_logits_quadrant.detach()
+
         if freeze_class2:
-          class_logits_enumeration.detach()
-          
+            class_logits_enumeration = class_logits_enumeration.detach()
+
         if freeze_class3:
-          class_logits_disease.detach()
+            class_logits_disease = class_logits_disease.detach()
         
         return class_logits_quadrant.view(N, nr_boxes, -1), class_logits_enumeration.view(N, nr_boxes, -1), class_logits_disease.view(N, nr_boxes, -1), pred_bboxes.view(N, nr_boxes, -1), obj_features
 

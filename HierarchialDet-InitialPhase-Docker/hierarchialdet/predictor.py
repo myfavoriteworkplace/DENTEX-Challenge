@@ -33,7 +33,6 @@ class VisualizationDemo(object):
             num_gpu = torch.cuda.device_count()
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)
         else:
-            print(k)
             self.predictor = DefaultPredictor(cfg, k)
         
         self.threshold = cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST  # workaround

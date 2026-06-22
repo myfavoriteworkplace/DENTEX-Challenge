@@ -167,26 +167,6 @@ class DiffusionDet(nn.Module):
         self.freeze_class2=False
         self.freeze_class3=False
         
-        boxes_train = "ibrahim/quadrant_detection_over_enumeration_train/inference/coco_instances_results.json"
-        boxes_valid = "ibrahim/quadrant_detection_over_enumeration_val/inference/coco_instances_results.json"
-        
-        
-        self.train_boxes=[]
-        self.valid_boxes=[]
-        #f_train = open(boxes_train)
-        #dict_train = json.load(f_train)
-        
-        #f_valid= open(boxes_valid)
-        #dict_valid=json.load(f_valid)
-        """
-        for inference in dict_train:
-          if inference["score"]>=0.5:
-            self.train_boxes.append(inference)
-          
-        for inference in dict_valid:
-          if inference["score"]>=0.5:
-            self.valid_boxes.append(inference)
-        """
         
         
         
@@ -393,11 +373,12 @@ class DiffusionDet(nn.Module):
                   sigma * noise
             
             
-            if self.box_renewal:  # filter
-                # replenish with randn boxes
-                #img = torch.cat((img, torch.randn(1, self.num_proposal-len(bbox_pretrain), 4, device=img.device)), dim=1)
-                img = torch.cat((img, torch.randn(1, self.num_proposal, 4, device=img.device)), dim=1)
-                img = torch.concat((img, torch.stack(bbox_pre)),1)
+            if self.box_renewal:  # replenish filtered boxes back up to num_proposals
+                num_to_add = self.num_proposals - img.shape[1]
+                if num_to_add > 0:
+                    img = torch.cat(
+                        (img, torch.randn(1, num_to_add, 4, device=img.device)), dim=1
+                    )
 
             if self.use_ensemble and self.sampling_timesteps > 1:
                 

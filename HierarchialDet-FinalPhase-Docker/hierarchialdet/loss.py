@@ -149,11 +149,11 @@ class SetCriterionDynamicK(nn.Module):
             self.focal_loss_alpha = cfg.MODEL.DiffusionDet.ALPHA
             self.focal_loss_gamma = cfg.MODEL.DiffusionDet.GAMMA
         else:
-            emtpy_weight=[]
+            empty_weight = []
             for num_class in self.num_classes:
-              empty_weight_inp=torch.ones(self.num_class + 1)
-              empty_weight_inp[-1] = self.eos_coef
-              empty_weight.append(empty_weight_inp)
+                empty_weight_inp = torch.ones(num_class + 1)
+                empty_weight_inp[-1] = self.eos_coef
+                empty_weight.append(empty_weight_inp)
             self.register_buffer('empty_weight_1', empty_weight[0])
             self.register_buffer('empty_weight_2', empty_weight[1])
             self.register_buffer('empty_weight_3', empty_weight[2])
@@ -207,24 +207,30 @@ class SetCriterionDynamicK(nn.Module):
         
         
         try:
-          target_classes_1 = torch.full(src_logits_1.shape[:2], self.num_classes[0],
-                                      dtype=torch.int64, device=src_logits_1.device)
-          self.freeze_class1=False
-        except:
-          self.freeze_class1=True
-        try:                            
-          target_classes_2 = torch.full(src_logits_2.shape[:2], self.num_classes[1],
-                                      dtype=torch.int64, device=src_logits_2.device)
-          self.freeze_class2=False
-        except:
-          self.freeze_class2=True
-        
+            target_classes_1 = torch.full(
+                src_logits_1.shape[:2], self.num_classes[0],
+                dtype=torch.int64, device=src_logits_1.device,
+            )
+            self.freeze_class1 = False
+        except (NameError, UnboundLocalError):
+            self.freeze_class1 = True
         try:
-          target_classes_3 = torch.full(src_logits_3.shape[:2], self.num_classes[2],
-                                      dtype=torch.int64, device=src_logits_3.device)
-          self.freeze_class3=False
-        except:
-          self.freeze_class3=True
+            target_classes_2 = torch.full(
+                src_logits_2.shape[:2], self.num_classes[1],
+                dtype=torch.int64, device=src_logits_2.device,
+            )
+            self.freeze_class2 = False
+        except (NameError, UnboundLocalError):
+            self.freeze_class2 = True
+
+        try:
+            target_classes_3 = torch.full(
+                src_logits_3.shape[:2], self.num_classes[2],
+                dtype=torch.int64, device=src_logits_3.device,
+            )
+            self.freeze_class3 = False
+        except (NameError, UnboundLocalError):
+            self.freeze_class3 = True
                                     
         
         src_logits_list_1 = []
@@ -260,7 +266,7 @@ class SetCriterionDynamicK(nn.Module):
               bz_src_logits_3 = src_logits_3[batch_idx]
               target_classes_o_3 = targets[batch_idx]["labels_3"]
               target_classes_3[batch_idx, valid_query] = target_classes_o_3[gt_multi_idx]
-              src_logits_list_3.append(bz_src_logits_1[valid_query])
+              src_logits_list_3.append(bz_src_logits_3[valid_query])
               target_classes_o_3_list.append(target_classes_o_3[gt_multi_idx])
              
             
@@ -367,16 +373,16 @@ class SetCriterionDynamicK(nn.Module):
                 K = self.num_classes
                 try:
                   N1 = src_logits_1.shape[0]
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                 try:
                   N2 = src_logits_2.shape[0]
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                 
                 try:  
                   N3 = src_logits_3.shape[0]
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                   
                 if not self.freeze_class2 and not self.freeze_class3:       
@@ -398,7 +404,7 @@ class SetCriterionDynamicK(nn.Module):
                       num_classes=K[0],
                       weight=self.fed_loss_cls_weights_1,
                   )
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                 try:
                   fed_loss_classes_2 = self.get_fed_loss_classes(
@@ -407,7 +413,7 @@ class SetCriterionDynamicK(nn.Module):
                       num_classes=K[1],
                       weight=self.fed_loss_cls_weights_2,
                   )
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                   
                 try:    
@@ -417,7 +423,7 @@ class SetCriterionDynamicK(nn.Module):
                       num_classes=K[2],
                       weight=self.fed_loss_cls_weights_3,
                   )
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                   
                   
@@ -557,7 +563,7 @@ class SetCriterionDynamicK(nn.Module):
         # Compute the average number of target boxes accross all nodes, for normalization purposes
         try:
           num_boxes = sum(len(t["labels_1"]) for t in targets)
-        except:
+        except (NameError, UnboundLocalError, AttributeError):
           num_boxes = sum(len(t["labels_2"]) for t in targets)
         num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
         if is_dist_avail_and_initialized():
@@ -625,23 +631,23 @@ class HungarianMatcherDynamicK(nn.Module):
         with torch.no_grad():
             try:
               bs, num_queries = outputs["pred_logits_1"].shape[:2]
-            except:
+            except (NameError, UnboundLocalError, AttributeError):
               bs, num_queries = outputs["pred_logits_2"].shape[:2]
             # We flatten to compute the cost matrices in a batch
             if self.use_focal or self.use_fed_loss:
                 try:
                   out_prob_1=outputs["pred_logits_1"].sigmoid()
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   self.freeze_layer1=True
                 try:
                   out_prob_2=outputs["pred_logits_2"].sigmoid()
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   self.freeze_layer2=True  
                   
                   
                 try:  
                   out_prob_3=outputs["pred_logits_3"].sigmoid()  # [batch_size, num_queries, num_classes
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   self.freeze_layer3=True
                   
                 out_bbox = outputs["pred_boxes"]  # [batch_size,  num_queries, 4]
@@ -649,12 +655,12 @@ class HungarianMatcherDynamicK(nn.Module):
                 out_prob_1=outputs["pred_logits_1"].softmax(-1)  # [batch_size, num_queries, num_classes]
                 try:
                   out_prob_2=outputs["pred_logits_2"].softmax(-1)
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                   
                 try:
                   out_prob_3=outputs["pred_logits_3"].softmax(-1)
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   pass
                 out_bbox = outputs["pred_boxes"]  # [batch_size, num_queries, 4]
                 
@@ -700,7 +706,7 @@ class HungarianMatcherDynamicK(nn.Module):
                   
                 try:
                   num_insts= len(bz_tgt_ids_1)
-                except:
+                except (NameError, UnboundLocalError, AttributeError):
                   num_insts= len(bz_tgt_ids_2)
 
                 if num_insts == 0:  # empty object in key frame

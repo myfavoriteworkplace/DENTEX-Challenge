@@ -1,67 +1,42 @@
 import os
+import sys
 import json
+import logging
+import glob
+from pathlib import Path
+
 from detectron2.config import get_cfg
 from hierarchialdet import DiffusionDetDatasetMapper, add_diffusiondet_config, DiffusionDetWithTTA
-from hierarchialdet.util.model_ema import add_model_ema_configs, may_build_model_ema, may_get_ema_checkpointer, EMAHook, \
-    apply_model_ema_and_restore, EMADetectionCheckpointer
+from hierarchialdet.util.model_ema import (
+    add_model_ema_configs,
+    may_build_model_ema,
+    may_get_ema_checkpointer,
+    EMAHook,
+    apply_model_ema_and_restore,
+    EMADetectionCheckpointer,
+)
 from hierarchialdet.predictor import VisualizationDemo
 import argparse
 import SimpleITK as sitk
-import glob
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%S",
+    stream=sys.stdout,
+)
+logger = logging.getLogger("hierarchialdet.process")
 
 
-list_ids = [
-                          {"height": 1316, "width": 2892, "id": 1, "file_name": "val_15.png"},
-                          {"height": 1316, "width": 2942, "id": 2, "file_name": "val_38.png"},
-                          {"height": 1316, "width": 2987, "id": 3, "file_name": "val_33.png"},
-                          {"height": 1504, "width": 2872, "id": 4, "file_name": "val_30.png"},
-                          {"height": 1316, "width": 2970, "id": 5, "file_name": "val_5.png"},
-                          {"height": 1316, "width": 2860, "id": 6, "file_name": "val_21.png"},
-                          {"height": 1504, "width": 2804, "id": 7, "file_name": "val_39.png"},
-                          {"height": 1316, "width": 2883, "id": 8, "file_name": "val_46.png"},
-                          {"height": 1316, "width": 2967, "id": 9, "file_name": "val_20.png"},
-                          {"height": 1504, "width": 2872, "id": 10, "file_name": "val_3.png"},
-                          {"height": 1316, "width": 2954, "id": 11, "file_name": "val_29.png"},
-                          {"height": 976, "width": 1976, "id": 12, "file_name": "val_2.png"},
-                          {"height": 1316, "width": 2870, "id": 13, "file_name": "val_16.png"},
-                          {"height": 1316, "width": 3004, "id": 14, "file_name": "val_25.png"},
-                          {"height": 1316, "width": 2745, "id": 15, "file_name": "val_24.png"},
-                          {"height": 1504, "width": 2872, "id": 16, "file_name": "val_31.png"},
-                          {"height": 1316, "width": 2782, "id": 17, "file_name": "val_26.png"},
-                          {"height": 1316, "width": 2744, "id": 18, "file_name": "val_44.png"},
-                          {"height": 1504, "width": 2872, "id": 19, "file_name": "val_27.png"},
-                          {"height": 1504, "width": 2868, "id": 20, "file_name": "val_41.png"},
-                          {"height": 1316, "width": 3000, "id": 21, "file_name": "val_37.png"},
-                          {"height": 1316, "width": 2797, "id": 22, "file_name": "val_40.png"},
-                          {"height": 1316, "width": 2930, "id": 23, "file_name": "val_6.png"},
-                          {"height": 1316, "width": 3003, "id": 24, "file_name": "val_18.png"},
-                          {"height": 1316, "width": 2967, "id": 25, "file_name": "val_13.png"},
-                          {"height": 1316, "width": 2822, "id": 26, "file_name": "val_8.png"},
-                          {"height": 1316, "width": 2836, "id": 27, "file_name": "val_49.png"},
-                          {"height": 1316, "width": 2704, "id": 28, "file_name": "val_23.png"},
-                          {"height": 976, "width": 1976, "id": 29, "file_name": "val_1.png"},
-                          {"height": 1504, "width": 2872, "id": 30, "file_name": "val_43.png"},
-                          {"height": 1504, "width": 2872, "id": 31, "file_name": "val_28.png"},
-                          {"height": 1504, "width": 2872, "id": 32, "file_name": "val_19.png"},
-                          {"height": 1316, "width": 2728, "id": 33, "file_name": "val_14.png"},
-                          {"height": 1316, "width": 2747, "id": 34, "file_name": "val_32.png"},
-                          {"height": 976, "width": 1976, "id": 35, "file_name": "val_36.png"},
-                          {"height": 1316, "width": 2829, "id": 36, "file_name": "val_47.png"},
-                          {"height": 1316, "width": 2846, "id": 37, "file_name": "val_48.png"},
-                          {"height": 1536, "width": 3076, "id": 38, "file_name": "val_17.png"},
-                          {"height": 976, "width": 1976, "id": 39, "file_name": "val_42.png"},
-                          {"height": 1504, "width": 2884, "id": 40, "file_name": "val_45.png"},
-                          {"height": 1316, "width": 2741, "id": 41, "file_name": "val_9.png"},
-                          {"height": 1316, "width": 2794, "id": 42, "file_name": "val_4.png"},
-                          {"height": 1316, "width": 2959, "id": 43, "file_name": "val_34.png"},
-                          {"height": 1316, "width": 2874, "id": 44, "file_name": "val_10.png"},
-                          {"height": 1316, "width": 2978, "id": 45, "file_name": "val_35.png"},
-                          {"height": 1504, "width": 2884, "id": 46, "file_name": "val_11.png"},
-                          {"height": 1316, "width": 2794, "id": 47, "file_name": "val_12.png"},
-                          {"height": 1316, "width": 2959, "id": 48, "file_name": "val_7.png"},
-                          {"height": 1316, "width": 2912, "id": 49, "file_name": "val_22.png"},
-                          {"height": 1504, "width": 2872, "id": 50, "file_name": "val_0.png"},
-                      ]
+def load_image_index(index_path: str) -> dict:
+    """Load image metadata from JSON and return a filename→id mapping for O(1) lookup."""
+    index_path = str(index_path)
+    if not os.path.isfile(index_path):
+        raise FileNotFoundError(f"Image index file not found: {index_path}")
+    with open(index_path) as f:
+        entries = json.load(f)
+    return {entry["file_name"]: entry["id"] for entry in entries}
+
 
 def custom_format_output(outputs, img_ids):
     boxes = []
@@ -69,33 +44,30 @@ def custom_format_output(outputs, img_ids):
         for i in range(len(instances)):
             instance = instances[i]
             bbox_coords = instance.pred_boxes.tensor[0].tolist()
-
             category_id_1 = instance.pred_classes_1[0].item()
             category_id_2 = instance.pred_classes_2[0].item()
-            category_id_3 = instance.pred_classes_3[0].item()
             img_id = img_ids[k]
             box = {
-                "name": f"{category_id_1} - {category_id_2} - {category_id_3}",
+                "name": f"{category_id_1} - {category_id_2}",
                 "corners": [
                     [bbox_coords[0], bbox_coords[1], img_id],
                     [bbox_coords[0], bbox_coords[3], img_id],
                     [bbox_coords[2], bbox_coords[1], img_id],
-                    [bbox_coords[2], bbox_coords[3], img_id]
+                    [bbox_coords[2], bbox_coords[3], img_id],
                 ],
                 "probability": instance.scores[0].item(),
             }
             boxes.append(box)
 
-        custom_annotations={
+    return {
         "name": "Regions of interest",
         "type": "Multiple 2D bounding boxes",
         "boxes": boxes,
-        "version": { "major": 1, "minor": 0 }
-        }
-    return custom_annotations
+        "version": {"major": 1, "minor": 0},
+    }
 
 
-def coco_format_output(outputs,img_ids):
+def coco_format_output(outputs, img_ids):
     coco_annotations = []
     for k, instances in enumerate(outputs):
         for i in range(len(instances)):
@@ -103,37 +75,33 @@ def coco_format_output(outputs,img_ids):
             bbox_coords = instance.pred_boxes.tensor[0].tolist()
             bbox_coords[2] = bbox_coords[2] - bbox_coords[0]
             bbox_coords[3] = bbox_coords[3] - bbox_coords[1]
-
             coco_annotation = {
-                            "image_id": img_ids[k],
-                            "category_id_1": instance.pred_classes_1[0].item(),
-                            "category_id_2": instance.pred_classes_2[0].item(),
-                            "category_id_3": instance.pred_classes_3[0].item(),
-                            "bbox": bbox_coords,
-                            "score": instance.scores[0].item(),
-                        }
+                "image_id": img_ids[k],
+                "category_id_1": instance.pred_classes_1[0].item(),
+                "category_id_2": instance.pred_classes_2[0].item(),
+                "bbox": bbox_coords,
+                "score": instance.scores[0].item(),
+            }
             coco_annotations.append(coco_annotation)
     return coco_annotations
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(description="Detectron2 demo for builtin configs")
-
-
+    parser = argparse.ArgumentParser(
+        description="HierarchialDet initial phase inference for dental X-ray analysis"
+    )
     parser.add_argument(
         "--confidence-threshold",
         type=float,
-        default=0.0,
+        default=float(os.environ.get("CONFIDENCE_THRESHOLD", "0.0")),
         help="Minimum score for instance predictions to be shown",
     )
-
     parser.add_argument(
         "--nclass",
         type=int,
-        default=3,
-        help="Number of trained classes",
+        default=2,
+        help="Number of trained class levels (1=quadrant, 2=+enumeration)",
     )
-
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
@@ -147,50 +115,143 @@ class Hierarchialdet:
     def __init__(self):
         self.cfg = None
         self.demo = None
-        self.input_dir = "input"
+        self.config_path = os.environ.get(
+            "CONFIG_PATH",
+            "/opt/app/configs/diffdet.custom.swinbase.nonpretrain.yaml",
+        )
+        self.weights_path = os.environ.get(
+            "MODEL_WEIGHTS",
+            "/opt/app/pretrained_model/model_final.pth",
+        )
+        self.input_dir = os.environ.get(
+            "INPUT_DIR",
+            "/input/images/panoramic-dental-xrays",
+        )
+        self.output_path = os.environ.get(
+            "OUTPUT_PATH",
+            "/output/abnormal-teeth-detection.json",
+        )
+        self.index_path = os.environ.get(
+            "IMAGE_INDEX_PATH",
+            str(Path(__file__).parent / "val_ids.json"),
+        )
+
+    def validate_inputs(self):
+        """Validate all required files and directories exist before running inference."""
+        errors = []
+
+        if not os.path.isfile(self.config_path):
+            errors.append(f"Config file not found: {self.config_path}")
+
+        if not os.path.isfile(self.weights_path):
+            errors.append(f"Model weights not found: {self.weights_path}")
+
+        mha_files = glob.glob(os.path.join(self.input_dir, "*.mha"))
+        if not mha_files:
+            errors.append(f"No .mha input files found in: {self.input_dir}")
+
+        if errors:
+            for msg in errors:
+                logger.error("Validation error: %s", msg)
+            raise FileNotFoundError(
+                f"Input validation failed with {len(errors)} error(s). See logs above."
+            )
+
+        logger.info("Input validation passed. Found %d .mha file(s).", len(mha_files))
+        return mha_files
 
     def setup(self):
         args = get_parser().parse_args()
+        logger.info("Setting up model configuration from: %s", self.config_path)
         self.cfg = get_cfg()
         add_diffusiondet_config(self.cfg)
         add_model_ema_configs(self.cfg)
-        self.cfg.merge_from_file("/opt/app/configs/diffdet.custom.swinbase.nonpretrain.yaml")
-        self.cfg.MODEL.WEIGHTS = "/opt/app/pretrained_model/model_final.pth"
+        self.cfg.merge_from_file(self.config_path)
+        self.cfg.MODEL.WEIGHTS = self.weights_path
         self.cfg.merge_from_list(args.opts)
         self.cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
         self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
-        self.cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = args.confidence_threshold
+        self.cfg.MODEL.PANOPTIC_FPN.COMBINE.INSTANCES_CONFIDENCE_THRESH = (
+            args.confidence_threshold
+        )
         self.cfg.freeze()
-        self.demo = VisualizationDemo(self.cfg, k=2)
+        logger.info("Loading model weights from: %s", self.weights_path)
+        self.demo = VisualizationDemo(self.cfg, k=1)
+        logger.info("Model ready.")
 
     def process(self):
+        try:
+            mha_files = self.validate_inputs()
+        except FileNotFoundError as exc:
+            logger.error("Aborting: %s", exc)
+            sys.exit(1)
+
         self.setup()
 
-        #image_files = [f for f in os.listdir(self.input_dir) if os.path.isfile(os.path.join(self.input_dir, f))]
+        try:
+            image_index = load_image_index(self.index_path)
+            logger.info(
+                "Loaded image index with %d entries from %s",
+                len(image_index),
+                self.index_path,
+            )
+        except FileNotFoundError as exc:
+            logger.warning(
+                "Image index unavailable, slice indices will default to slice number. %s",
+                exc,
+            )
+            image_index = {}
 
         all_outputs = []
         img_ids = []
-        
-        file_path = glob.glob('/input/images/panoramic-dental-xrays/*.mha')[0]
-        image = sitk.ReadImage(file_path)
+
+        file_path = mha_files[0]
+        logger.info("Reading input file: %s", file_path)
+
+        try:
+            image = sitk.ReadImage(file_path)
+        except RuntimeError as exc:
+            logger.error("Failed to read input image '%s': %s", file_path, exc)
+            sys.exit(1)
+
         image_array = sitk.GetArrayFromImage(image)
-        print("test..")
-        for k in range(image_array.shape[2]):
-            image_name = "val_{}.png".format(k)
-            predictions, _ = self.demo.run_on_image(image_array[:,:,k,:])
+        total_slices = image_array.shape[2]
+        logger.info("Processing %d image slice(s).", total_slices)
+
+        for k in range(total_slices):
+            image_name = f"val_{k}.png"
+            logger.info("Inference on slice %d/%d (%s)", k + 1, total_slices, image_name)
+
+            try:
+                predictions, _ = self.demo.run_on_image(image_array[:, :, k, :])
+            except Exception as exc:
+                logger.error("Inference failed on slice %s: %s", image_name, exc)
+                raise
+
             instances = predictions["instances"]
             all_outputs.append(instances)
-            for input_img in list_ids:
-                if input_img["file_name"] == image_name:
-                    img_id = input_img["id"]
+
+            img_id = image_index.get(image_name)
+            if img_id is None:
+                logger.warning(
+                    "No ID found for '%s' in image index. Defaulting to slice index %d.",
+                    image_name,
+                    k,
+                )
+                img_id = k
             img_ids.append(img_id)
-        coco_annotations = custom_format_output(all_outputs,img_ids)
 
-        output_file = "/output/abnormal-teeth-detection.json"
-        with open(output_file, "w") as f:
-            json.dump(coco_annotations, f)
+        logger.info("All slices processed. Formatting output.")
+        annotations = custom_format_output(all_outputs, img_ids)
 
-        print("Inference completed. Results saved to", output_file)
+        output_dir = os.path.dirname(self.output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+
+        with open(self.output_path, "w") as f:
+            json.dump(annotations, f, indent=2)
+
+        logger.info("Results written to %s", self.output_path)
 
 
 if __name__ == "__main__":
